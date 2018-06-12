@@ -1,0 +1,6 @@
+[package]
+name = "spelspell"
+version = "0.1.0"
+authors = ["Ratys <ratysz@gmail.com>"]
+
+[dependencies]
