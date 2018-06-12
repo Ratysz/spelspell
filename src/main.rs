@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate bitflags;
 extern crate chrono;
 extern crate fern;
 extern crate ggez;
@@ -22,6 +24,14 @@ struct App {
     input_handler: input::InputHandler,
 }
 
+impl App {
+    pub fn new(ctx: &mut Context) -> App {
+        App {
+            input_handler: input::InputHandler::new(),
+        }
+    }
+}
+
 impl EventHandler for App {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         const DESIRED_FPS: u32 = 60;
@@ -44,7 +54,7 @@ impl EventHandler for App {
         repeat: bool,
     ) {
         self.input_handler
-            .key_down_event(ctx, keycode, keymods, repeat);
+            .key_down_event(ctx, keycode, keymods.into(), repeat);
     }
 
     fn resize_event(&mut self, ctx: &mut Context, width: u32, height: u32) {
@@ -68,9 +78,7 @@ fn wrapped() -> GameResult {
         )
         .build()?;
 
-    let state = &mut App {
-        input_handler: input::InputHandler,
-    };
+    let state = &mut App::new(ctx);
     event::run(ctx, events_loop, state)
 }
 

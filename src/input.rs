@@ -1,7 +1,7 @@
-use ggez::event::{EventHandler, KeyCode, KeyMods};
+use ggez::event::{EventHandler, KeyCode};
 use ggez::{Context, GameResult};
 
-use types::*;
+use types::{Direction, KeyMod};
 
 pub enum LogicalInput {
     App(AppControl),
@@ -13,20 +13,25 @@ pub enum AppControl {
     Pause,
 }
 
-pub struct InputHandler;
+pub struct InputHandler {}
 
 impl InputHandler {
+    pub fn new() -> InputHandler {
+        InputHandler {}
+    }
+
     pub fn key_down_event(
         &mut self,
-        _ctx: &mut Context,
-        _keycode: KeyCode,
-        _keymods: KeyMods,
-        _repeat: bool,
+        ctx: &mut Context,
+        keycode: KeyCode,
+        keymods: KeyMod,
+        repeat: bool,
     ) {
-        trace!("{:?}", _keycode);
-        debug!("{:?}", _keycode);
-        info!("{:?}", _keycode);
-        warn!("{:?}", _keycode);
-        error!("{:?}", _keycode);
+        if !repeat {
+            info!("Keycode: {:?}, modifiers: {:?}", keycode, keymods);
+            if keymods.contains(KeyMod::SHIFT) && keycode == KeyCode::Escape {
+                ctx.quit();
+            }
+        }
     }
 }

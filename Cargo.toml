@@ -8,6 +8,7 @@ git = "https://github.com/ggez/ggez.git"
 rev = "067a70c0b3b0a0a92812a971062f166e4337ff66"
 
 [dependencies]
+bitflags = "1.0"
 chrono = "0.4"
 fern = { version = "0.5", features = ["colored"] }
 log = "0.4"
