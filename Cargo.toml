@@ -3,4 +3,24 @@ name = "spelspell"
 version = "0.1.0"
 authors = ["Ratys <ratysz@gmail.com>"]
 
+[dependencies.ggez]
+git = "https://github.com/ggez/ggez.git"
+rev = "067a70c0b3b0a0a92812a971062f166e4337ff66"
+
 [dependencies]
+chrono = "0.4"
+fern = { version = "0.5", features = ["colored"] }
+log = "0.4"
+nalgebra = "0.15"
+rand = "0.5"
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+overflow-checks = true
