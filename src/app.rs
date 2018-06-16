@@ -27,7 +27,9 @@ impl<'a, 'b> App<'a, 'b> {
 impl<'a, 'b> EventHandler for App<'a, 'b> {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         const DESIRED_FPS: u32 = 60;
-        while timer::check_update_time(ctx, DESIRED_FPS) {}
+        while timer::check_update_time(ctx, DESIRED_FPS) {
+            self.game_state.update(timer::get_delta(ctx));
+        }
         Ok(())
     }
 

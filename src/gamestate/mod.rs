@@ -1,10 +1,11 @@
-use chrono::Duration;
 use nalgebra as na;
 use specs::{Dispatcher, DispatcherBuilder, World};
+use std::time::Duration;
 
 use types::Direction;
 
 pub mod physics;
+pub mod time;
 pub mod visual;
 
 pub struct GameState<'a, 'b> {
@@ -17,7 +18,7 @@ impl<'a, 'b> GameState<'a, 'b> {
         let mut world = World::new();
         world.register::<physics::Position>();
         world.register::<visual::BaseSprite>();
-        world.add_resource(Duration::zero());
+        world.add_resource(time::Timekeeper::new());
 
         {
             use self::physics::Position;
@@ -50,7 +51,9 @@ impl<'a, 'b> GameState<'a, 'b> {
     }
 
     pub fn update(&mut self, d_time: Duration) {
-        *self.world.write_resource::<Duration>() = d_time;
+        self.world
+            .write_resource::<time::Timekeeper>()
+            .update_real_time(d_time);
         self.dispatcher.dispatch(&mut self.world.res);
     }
 
