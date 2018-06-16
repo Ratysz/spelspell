@@ -96,15 +96,7 @@ impl InputHandler {
         None
     }
 
-    pub fn key_down_event(
-        &mut self,
-        ctx: &mut Context,
-        keycode: KeyCode,
-        keymods: KeyMod,
-        repeat: bool,
-    ) {
-
-    }
+    pub fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, mods: KeyMod, rpt: bool) {}
 }
 
 #[cfg(test)]
