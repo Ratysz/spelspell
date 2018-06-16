@@ -3,6 +3,7 @@ use ggez::graphics::{self, Color};
 use ggez::timer;
 use ggez::{Context, GameResult};
 
+use assets::Assets;
 use gamestate::GameState;
 use input::InputHandler;
 use renderer;
@@ -10,14 +11,16 @@ use renderer;
 pub struct App<'a, 'b> {
     input_handler: InputHandler,
     game_state: GameState<'a, 'b>,
+    assets: Assets,
 }
 
 impl<'a, 'b> App<'a, 'b> {
-    pub fn new(ctx: &mut Context) -> App<'a, 'b> {
-        App {
+    pub fn new(ctx: &mut Context) -> GameResult<App<'a, 'b>> {
+        Ok(App {
             input_handler: InputHandler::default(),
             game_state: GameState::new(),
-        }
+            assets: Assets::new(ctx)?,
+        })
     }
 }
 
@@ -30,7 +33,7 @@ impl<'a, 'b> EventHandler for App<'a, 'b> {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, Color::from([0.0, 0.0, 0.0, 1.0]));
-        renderer::render(ctx, self.game_state.get_world())?;
+        renderer::render(ctx, self.game_state.get_world(), &self.assets)?;
         graphics::present(ctx)?;
         timer::yield_now();
         Ok(())

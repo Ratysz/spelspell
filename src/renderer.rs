@@ -3,18 +3,18 @@ use ggez::{Context, GameResult};
 use nalgebra as na;
 use specs::{Join, World};
 
+use assets::Assets;
 use gamestate::physics::Position;
+use gamestate::visual::BaseSprite;
 
-pub fn render(ctx: &mut Context, world: &World) -> GameResult {
+pub fn render(ctx: &mut Context, world: &World, assets: &Assets) -> GameResult {
     let pos_s = world.read_storage::<Position>();
-    for pos in (&pos_s).join() {
-        graphics::circle(
+    let vis_s = world.read_storage::<BaseSprite>();
+    for (pos, vis) in (&pos_s, &vis_s).join() {
+        graphics::draw(
             ctx,
-            graphics::Color::from([0.0, 1.0, 1.0, 1.0]),
-            graphics::DrawMode::Fill,
-            na::Point2::new(pos.x() as f32, pos.y() as f32),
-            10.0,
-            0.1,
+            assets.fetch_drawable(vis.drawable),
+            (pos.point(), vis.color),
         )?;
     }
     Ok(())

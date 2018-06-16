@@ -1,3 +1,4 @@
+use nalgebra as na;
 use specs::prelude::*;
 
 use types::Direction;
@@ -20,6 +21,10 @@ impl Position {
 
     pub fn y(&self) -> i32 {
         self.y
+    }
+
+    pub fn point(&self) -> na::Point2<f32> {
+        na::Point2::new(self.x as f32, self.y as f32)
     }
 
     pub fn r(&self) -> Direction {

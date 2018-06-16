@@ -16,6 +16,7 @@ use ggez::event;
 use ggez::{ContextBuilder, GameResult};
 
 mod app;
+mod assets;
 mod gamestate;
 mod input;
 mod renderer;
@@ -34,7 +35,7 @@ fn wrapped() -> GameResult {
         )
         .build()?;
 
-    let state = &mut app::App::new(ctx);
+    let state = &mut app::App::new(ctx)?;
     event::run(ctx, events_loop, state)
 }
 
