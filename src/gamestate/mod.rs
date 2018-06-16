@@ -2,8 +2,7 @@ use nalgebra as na;
 use specs::{Dispatcher, DispatcherBuilder, World};
 use std::time::Duration;
 
-use types::Direction;
-
+pub mod command;
 pub mod physics;
 pub mod time;
 pub mod visual;
@@ -19,8 +18,10 @@ impl<'a, 'b> GameState<'a, 'b> {
         world.register::<physics::Position>();
         world.register::<visual::BaseSprite>();
         world.add_resource(time::Timekeeper::new());
+        world.add_resource(command::GameCommandQueue::new());
 
         {
+            use self::physics::Direction;
             use self::physics::Position;
             use self::visual::BaseSprite;
             use assets::DrawableHandle;
@@ -55,9 +56,18 @@ impl<'a, 'b> GameState<'a, 'b> {
             .write_resource::<time::Timekeeper>()
             .update_real_time(d_time);
         self.dispatcher.dispatch(&mut self.world.res);
+        self.world.maintain();
     }
 
     pub fn get_world(&self) -> &World {
         &self.world
+    }
+
+    pub fn queue_command(&self, command: Option<command::GameCommand>) {
+        if let Some(command) = command {
+            self.world
+                .write_resource::<command::GameCommandQueue>()
+                .queue(command);
+        }
     }
 }

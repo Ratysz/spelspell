@@ -18,9 +18,10 @@ use ggez::{ContextBuilder, GameResult};
 mod app;
 mod assets;
 mod gamestate;
+mod gui;
 mod input;
+mod keymod;
 mod renderer;
-mod types;
 
 fn wrapped() -> GameResult {
     let w_dim = nalgebra::Vector2::new(640, 480);

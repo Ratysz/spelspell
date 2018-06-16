@@ -1,7 +1,21 @@
 use nalgebra as na;
 use specs::prelude::*;
 
-use types::Direction;
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum Direction {
+    N,
+    NE,
+    E,
+    SE,
+    S,
+    SW,
+    W,
+    NW,
+    U,
+    D,
+    None,
+}
 
 #[derive(Component, Debug)]
 pub struct Position {

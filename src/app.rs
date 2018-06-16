@@ -8,6 +8,8 @@ use gamestate::GameState;
 use input::InputHandler;
 use renderer;
 
+const DESIRED_FPS: u32 = 60;
+
 pub struct App<'a, 'b> {
     input_handler: InputHandler,
     game_state: GameState<'a, 'b>,
@@ -26,7 +28,6 @@ impl<'a, 'b> App<'a, 'b> {
 
 impl<'a, 'b> EventHandler for App<'a, 'b> {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        const DESIRED_FPS: u32 = 60;
         while timer::check_update_time(ctx, DESIRED_FPS) {
             self.game_state.update(timer::get_delta(ctx));
         }
@@ -42,8 +43,10 @@ impl<'a, 'b> EventHandler for App<'a, 'b> {
     }
 
     fn key_down_event(&mut self, ctx: &mut Context, key: KeyCode, mods: KeyMods, rpt: bool) {
-        self.input_handler
+        let command = self
+            .input_handler
             .key_down_event(ctx, key, mods.into(), rpt);
+        self.game_state.queue_command(command);
     }
 
     fn resize_event(&mut self, ctx: &mut Context, width: u32, height: u32) {

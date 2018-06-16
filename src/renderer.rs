@@ -1,6 +1,5 @@
 use ggez::graphics;
 use ggez::{Context, GameResult};
-use nalgebra as na;
 use specs::{Join, World};
 
 use assets::Assets;

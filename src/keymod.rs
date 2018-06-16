@@ -1,22 +1,4 @@
-use std::cmp::{Ord, Ordering};
-
 use ggez::event::KeyMods;
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum Direction {
-    N,
-    NE,
-    E,
-    SE,
-    S,
-    SW,
-    W,
-    NW,
-    U,
-    D,
-    None,
-}
 
 bitflags! {
     #[derive(Default)]
