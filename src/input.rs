@@ -48,6 +48,22 @@ impl Default for InputHandler {
             Input::Key(KeyCode::Q),
             KeyMod::CTRL | KeyMod::ALT,
             Command::App(AppCommand::Exit),
+        ).bind(
+            Input::Key(KeyCode::W),
+            KeyMod::NONE,
+            Command::Game(GameCommand::Move(Direction::N)),
+        ).bind(
+            Input::Key(KeyCode::A),
+            KeyMod::NONE,
+            Command::Game(GameCommand::Move(Direction::W)),
+        ).bind(
+            Input::Key(KeyCode::S),
+            KeyMod::NONE,
+            Command::Game(GameCommand::Move(Direction::S)),
+        ).bind(
+            Input::Key(KeyCode::D),
+            KeyMod::NONE,
+            Command::Game(GameCommand::Move(Direction::E)),
         );
         handler
     }
