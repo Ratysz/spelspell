@@ -3,8 +3,8 @@ use ggez::{Context, GameResult};
 use specs::{Join, World};
 
 use assets::Assets;
-use gamestate::physics::Position;
-use gamestate::visual::BaseSprite;
+use gamestate::BaseSprite;
+use gamestate::Position;
 
 pub fn render(ctx: &mut Context, world: &World, assets: &Assets) -> GameResult {
     let pos_s = world.read_storage::<Position>();

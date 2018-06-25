@@ -2,8 +2,8 @@ use ggez::event::{KeyCode, MouseButton};
 use ggez::Context;
 use std::collections::HashMap;
 
-use gamestate::command::GameCommand;
-use gamestate::physics::Direction;
+use gamestate::Direction;
+use gamestate::GameCommand;
 use keymod::KeyMod;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -44,27 +44,32 @@ pub struct InputHandler {
 impl Default for InputHandler {
     fn default() -> InputHandler {
         let mut handler = InputHandler::new();
-        handler.bind(
-            Input::Key(KeyCode::Q),
-            KeyMod::CTRL | KeyMod::ALT,
-            Command::App(AppCommand::Exit),
-        ).bind(
-            Input::Key(KeyCode::W),
-            KeyMod::NONE,
-            Command::Game(GameCommand::Move(Direction::N)),
-        ).bind(
-            Input::Key(KeyCode::A),
-            KeyMod::NONE,
-            Command::Game(GameCommand::Move(Direction::W)),
-        ).bind(
-            Input::Key(KeyCode::S),
-            KeyMod::NONE,
-            Command::Game(GameCommand::Move(Direction::S)),
-        ).bind(
-            Input::Key(KeyCode::D),
-            KeyMod::NONE,
-            Command::Game(GameCommand::Move(Direction::E)),
-        );
+        handler
+            .bind(
+                Input::Key(KeyCode::Q),
+                KeyMod::CTRL | KeyMod::ALT,
+                Command::App(AppCommand::Exit),
+            )
+            .bind(
+                Input::Key(KeyCode::W),
+                KeyMod::NONE,
+                Command::Game(GameCommand::Move(Direction::N)),
+            )
+            .bind(
+                Input::Key(KeyCode::A),
+                KeyMod::NONE,
+                Command::Game(GameCommand::Move(Direction::W)),
+            )
+            .bind(
+                Input::Key(KeyCode::S),
+                KeyMod::NONE,
+                Command::Game(GameCommand::Move(Direction::S)),
+            )
+            .bind(
+                Input::Key(KeyCode::D),
+                KeyMod::NONE,
+                Command::Game(GameCommand::Move(Direction::E)),
+            );
         handler
     }
 }
@@ -88,10 +93,10 @@ impl InputHandler {
             }
             if !done {
                 let bound_action_bunch = self.bindings.entry(input).or_insert_with(Vec::new);
-                let count = keymods.count();
+                let count = keymods.bits().count_ones();
                 let mut index = 0;
                 for bound_action in bound_action_bunch.iter() {
-                    if count >= bound_action.0.count() {
+                    if count >= bound_action.0.bits().count_ones() {
                         break;
                     }
                     index += 1;
@@ -119,7 +124,7 @@ impl InputHandler {
         input: InputExtra,
     ) -> Option<GameCommand> {
         if let Some(action) = action {
-            trace!("Action: {:?}, extra input: {:?}", action, input);
+            trace!("Action: {:?}, input extra: {:?}", action, input);
             match action {
                 Command::App(command) => match command {
                     AppCommand::Exit => ctx.quit(),

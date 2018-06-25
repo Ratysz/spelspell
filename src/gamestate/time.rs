@@ -33,6 +33,10 @@ impl Timekeeper {
         }
     }
 
+    pub fn get_real_delta(&self) -> Duration {
+        self.real_time_delta
+    }
+
     pub fn set_sim_time_factor(&mut self, factor: f32) {
         self.sim_time_factor = factor;
     }

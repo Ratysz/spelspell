@@ -11,22 +11,6 @@ bitflags! {
     }
 }
 
-impl KeyMod {
-    /// Amount of flags set (Kernighan/Wegner/Lehmer method).
-    pub fn count(&self) -> u8 {
-        let mut num_set = 0;
-        let mut bits = self.bits();
-        loop {
-            if num_set >= bits {
-                break;
-            }
-            bits &= bits - 1;
-            num_set += 1;
-        }
-        num_set
-    }
-}
-
 impl From<KeyMods> for KeyMod {
     fn from(keymods: KeyMods) -> Self {
         let mut keymod = KeyMod::empty();
@@ -115,19 +99,5 @@ mod tests {
                 logo: false,
             })
         );
-    }
-
-    #[test]
-    fn key_mod_set_bit_count() {
-        assert_eq!(KeyMod::empty().count(), 0);
-        assert_eq!(KeyMod::SHIFT.count(), 1);
-        assert_eq!(KeyMod::CTRL.count(), 1);
-        assert_eq!(KeyMod::ALT.count(), 1);
-        assert_eq!(KeyMod::LOGO.count(), 1);
-        assert_eq!((KeyMod::SHIFT | KeyMod::CTRL).count(), 2);
-        assert_eq!((KeyMod::SHIFT | KeyMod::LOGO).count(), 2);
-        assert_eq!((KeyMod::LOGO | KeyMod::SHIFT).count(), 2);
-        assert_eq!((KeyMod::LOGO | KeyMod::SHIFT | KeyMod::ALT).count(), 3);
-        assert_eq!((!KeyMod::ALT).count(), 3);
     }
 }

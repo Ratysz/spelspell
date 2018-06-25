@@ -1,11 +1,14 @@
-use nalgebra as na;
 use specs::{Dispatcher, DispatcherBuilder, World};
 use std::time::Duration;
 
-pub mod command;
-pub mod physics;
-pub mod time;
-pub mod visual;
+mod command;
+mod physics;
+mod time;
+mod visual;
+
+pub use self::command::GameCommand;
+pub use self::physics::{Direction, Position};
+pub use self::visual::BaseSprite;
 
 pub struct GameState<'a, 'b> {
     dispatcher: Dispatcher<'a, 'b>,
