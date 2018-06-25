@@ -1,6 +1,7 @@
 use specs::{Dispatcher, DispatcherBuilder, World};
 use std::time::Duration;
 
+mod brains;
 mod command;
 mod physics;
 mod time;
@@ -20,10 +21,21 @@ impl<'a, 'b> GameState<'a, 'b> {
         let mut world = World::new();
         world.register::<physics::Position>();
         world.register::<visual::BaseSprite>();
-        world.add_resource(time::Timekeeper::new());
-        world.add_resource(command::GameCommandQueue::new());
+        //world.add_resource(time::Timekeeper::new());
+        //world.add_resource(command::GameCommandQueue::new());
+
+        let mut dispatcher = DispatcherBuilder::new()
+            .with(
+                brains::BrainSystem::<brains::PlayerBrain>::new(),
+                "player_brain",
+                &[],
+            )
+            .with(brains::PlayerBrain {}, "player_brain_commands", &[])
+            .build();
+        dispatcher.setup(&mut world.res);
 
         {
+            use self::brains::PlayerBrain;
             use self::physics::Direction;
             use self::physics::Position;
             use self::visual::BaseSprite;
@@ -37,6 +49,7 @@ impl<'a, 'b> GameState<'a, 'b> {
                     drawable: DrawableHandle::Circle,
                     color: Color::from([0.0, 1.0, 1.0, 1.0]),
                 })
+                .with(PlayerBrain {})
                 .build();
 
             world
@@ -48,8 +61,6 @@ impl<'a, 'b> GameState<'a, 'b> {
                 })
                 .build();
         }
-
-        let dispatcher = DispatcherBuilder::new().build();
 
         GameState { dispatcher, world }
     }
@@ -72,5 +83,16 @@ impl<'a, 'b> GameState<'a, 'b> {
                 .write_resource::<command::GameCommandQueue>()
                 .queue(command);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tick_once() {
+        let mut state = GameState::new();
+        state.update(Duration::from_secs(1));
     }
 }

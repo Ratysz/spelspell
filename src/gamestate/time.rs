@@ -11,6 +11,12 @@ pub struct Timekeeper {
     sim_time_factor: f32,
 }
 
+impl Default for Timekeeper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Timekeeper {
     pub fn new() -> Timekeeper {
         Timekeeper {

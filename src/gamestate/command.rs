@@ -12,6 +12,12 @@ pub struct GameCommandQueue {
     queue: VecDeque<GameCommand>,
 }
 
+impl Default for GameCommandQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GameCommandQueue {
     pub fn new() -> GameCommandQueue {
         GameCommandQueue {
@@ -21,5 +27,9 @@ impl GameCommandQueue {
 
     pub fn queue(&mut self, command: GameCommand) {
         self.queue.push_back(command);
+    }
+
+    pub fn pop(&mut self) -> Option<GameCommand> {
+        self.queue.pop_front()
     }
 }
