@@ -1,10 +1,13 @@
 use ggez::graphics;
 use ggez::{Context, GameResult};
+use nalgebra as na;
 use specs::{Join, World};
 
 use assets::Assets;
 use gamestate::BaseSprite;
 use gamestate::Position;
+
+pub const TILE_SIZE_PX: (f32, f32) = (10.0, 10.0);
 
 pub fn render(ctx: &mut Context, world: &World, assets: &Assets) -> GameResult {
     let pos_s = world.read_storage::<Position>();
@@ -13,7 +16,13 @@ pub fn render(ctx: &mut Context, world: &World, assets: &Assets) -> GameResult {
         graphics::draw(
             ctx,
             assets.fetch_drawable(vis.drawable),
-            (pos.point(), vis.color),
+            (
+                na::Point2::new(
+                    pos.x() as f32 * TILE_SIZE_PX.0,
+                    pos.y() as f32 * TILE_SIZE_PX.1,
+                ),
+                vis.color,
+            ),
         )?;
     }
     Ok(())

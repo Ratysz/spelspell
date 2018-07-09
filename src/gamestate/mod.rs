@@ -21,8 +21,6 @@ impl<'a, 'b> GameState<'a, 'b> {
         let mut world = World::new();
         world.register::<physics::Position>();
         world.register::<visual::BaseSprite>();
-        //world.add_resource(time::Timekeeper::new());
-        //world.add_resource(command::GameCommandQueue::new());
 
         let mut dispatcher = DispatcherBuilder::new()
             .with(
@@ -44,7 +42,7 @@ impl<'a, 'b> GameState<'a, 'b> {
 
             world
                 .create_entity()
-                .with(Position::new(50, 50, Direction::None))
+                .with(Position::new(5, 5, Direction::None))
                 .with(BaseSprite {
                     drawable: DrawableHandle::Circle,
                     color: Color::from([0.0, 1.0, 1.0, 1.0]),
@@ -54,7 +52,7 @@ impl<'a, 'b> GameState<'a, 'b> {
 
             world
                 .create_entity()
-                .with(Position::new(100, 50, Direction::None))
+                .with(Position::new(10, 5, Direction::None))
                 .with(BaseSprite {
                     drawable: DrawableHandle::Box,
                     color: Color::from([1.0, 0.0, 1.0, 1.0]),

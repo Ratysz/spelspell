@@ -1,5 +1,6 @@
-use nalgebra as na;
 use specs::prelude::*;
+
+use super::time::{Duration, Instant, Timekeeper};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -18,6 +19,7 @@ pub enum Direction {
 }
 
 #[derive(Component, Debug)]
+#[storage(FlaggedStorage)]
 pub struct Position {
     x: i32,
     y: i32,
@@ -37,11 +39,13 @@ impl Position {
         self.y
     }
 
-    pub fn point(&self) -> na::Point2<f32> {
-        na::Point2::new(self.x as f32, self.y as f32)
-    }
-
     pub fn r(&self) -> Direction {
         self.r
     }
+}
+
+pub struct Movement {
+    direction: Direction,
+    duration: Duration,
+    start_time: Instant,
 }

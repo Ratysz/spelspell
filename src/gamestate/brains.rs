@@ -1,9 +1,8 @@
 use specs::prelude::*;
 use std::marker::PhantomData;
-use std::time::Duration;
 
 use super::command::{GameCommand, GameCommandQueue};
-use super::time::Timekeeper;
+use super::time::{DirectedTime, Duration, Timekeeper};
 
 pub struct BrainSystem<T>(PhantomData<T>);
 
@@ -36,7 +35,7 @@ impl<'a> System<'a> for PlayerBrain {
 
     fn run(&mut self, (mut time, mut commands, entity_s, mut brain_s): Self::SystemData) {
         for (entity, brain) in (&*entity_s, &mut brain_s).join() {
-            if let Some(delta) = time.get_sim_delta() {
+            if let DirectedTime::Future(delta) = time.sim_delta() {
                 info!("sim delta: {:?}", delta);
             }
             while let Some(command) = commands.pop() {
