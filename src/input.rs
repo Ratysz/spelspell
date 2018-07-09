@@ -47,7 +47,7 @@ impl Default for InputHandler {
         handler
             .bind(
                 Input::Key(KeyCode::Q),
-                KeyMod::CTRL | KeyMod::ALT,
+                KeyMod::CTRL,
                 Command::App(AppCommand::Exit),
             )
             .bind(

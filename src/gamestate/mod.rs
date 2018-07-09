@@ -1,4 +1,4 @@
-use specs::{Dispatcher, DispatcherBuilder, World};
+use specs::{Dispatcher, DispatcherBuilder, System, World};
 use std::time::Duration;
 
 mod brains;
@@ -16,19 +16,29 @@ pub struct GameState<'a, 'b> {
     world: World,
 }
 
+struct DispatcherBuilderWrapper<'a, 'b>(DispatcherBuilder<'a, 'b>);
+
+impl<'a, 'b> DispatcherBuilderWrapper<'a, 'b> {
+    fn with<T>(mut self, loader: T) -> DispatcherBuilderWrapper<'a, 'b>
+    where
+        T: Fn(DispatcherBuilder<'a, 'b>) -> DispatcherBuilder<'a, 'b>,
+    {
+        DispatcherBuilderWrapper(loader(self.0))
+    }
+
+    fn build(mut self) -> Dispatcher<'a, 'b> {
+        self.0.build()
+    }
+}
+
 impl<'a, 'b> GameState<'a, 'b> {
     pub fn new() -> GameState<'a, 'b> {
         let mut world = World::new();
         world.register::<physics::Position>();
         world.register::<visual::BaseSprite>();
 
-        let mut dispatcher = DispatcherBuilder::new()
-            .with(
-                brains::BrainSystem::<brains::PlayerBrain>::new(),
-                "player_brain",
-                &[],
-            )
-            .with(brains::PlayerBrain {}, "player_brain_commands", &[])
+        let mut dispatcher = DispatcherBuilderWrapper(DispatcherBuilder::new())
+            .with(brains::module_systems)
             .build();
         dispatcher.setup(&mut world.res);
 

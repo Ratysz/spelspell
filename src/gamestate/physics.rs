@@ -1,6 +1,6 @@
 use specs::prelude::*;
 
-use super::time::{Duration, Instant, Timekeeper};
+use super::time::{DirectedTime, Duration, Instant, Timekeeper};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -46,6 +46,6 @@ impl Position {
 
 pub struct Movement {
     direction: Direction,
-    duration: Duration,
     start_time: Instant,
+    end_time: Instant,
 }

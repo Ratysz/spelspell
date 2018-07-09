@@ -30,11 +30,11 @@ pub enum DirectedTime {
 
 pub struct Timekeeper {
     real_time_delta: Duration,
-    sim_timer: Duration,
+    remaining_sim_time: Duration,
     sim_delta: DirectedTime,
     sim_time_factor: f32,
     sim_elapsed_time: Duration,
-    sim_schedule: VecDeque<(Duration, Arc<Schedulable + Send + Sync>)>,
+    sim_schedule: VecDeque<(Duration, VecDeque<Arc<Schedulable + Send + Sync>>)>,
 }
 
 trait Schedulable {}
@@ -49,7 +49,7 @@ impl Timekeeper {
     pub fn new() -> Timekeeper {
         Timekeeper {
             real_time_delta: ZERO_DURATION,
-            sim_timer: ZERO_DURATION,
+            remaining_sim_time: ZERO_DURATION,
             sim_delta: DirectedTime::Still,
             sim_time_factor: 1.0,
             sim_elapsed_time: ZERO_DURATION,
@@ -59,10 +59,10 @@ impl Timekeeper {
 
     pub fn update_real_time(&mut self, d_time: Duration) {
         self.real_time_delta = d_time;
-        if self.sim_timer > ZERO_DURATION {
+        if self.remaining_sim_time > ZERO_DURATION {
             let adjusted = mul_dur_by_factor(self.real_time_delta, self.sim_time_factor.abs());
-            let time_chunk = min(adjusted, self.sim_timer);
-            self.sim_timer -= time_chunk;
+            let time_chunk = min(adjusted, self.remaining_sim_time);
+            self.remaining_sim_time -= time_chunk;
             match self.sim_time_factor.signum() {
                 1.0 => {
                     self.sim_elapsed_time += time_chunk;
@@ -81,31 +81,33 @@ impl Timekeeper {
         }
     }
 
-    pub fn real_delta(&self) -> Duration {
+    pub fn add_simulation_time(&mut self, d_time: Duration) {
+        self.remaining_sim_time += d_time;
+    }
+
+    pub fn real_time_delta(&self) -> Duration {
         self.real_time_delta
     }
 
-    pub fn add_sim_time(&mut self, d_time: Duration) {
-        self.sim_timer += d_time;
-    }
-
-    pub fn sim_delta(&self) -> DirectedTime {
+    pub fn delta(&self) -> DirectedTime {
         self.sim_delta
     }
 
-    pub fn set_sim_time_factor(&mut self, factor: f32) {
+    pub fn set_time_factor(&mut self, factor: f32) {
         self.sim_time_factor = factor;
     }
 
-    pub fn sim_time_factor(&self) -> f32 {
+    pub fn time_factor(&self) -> f32 {
         self.sim_time_factor
     }
 
-    pub fn sim_now(&self) -> Instant {
+    pub fn now(&self) -> Instant {
         Instant(self.sim_elapsed_time)
     }
 
-    pub fn sim_schedule<T: Schedulable>(&mut self, duration: Duration, event: T) {}
+    pub fn schedule<T: Schedulable>(&mut self, time_from_now: Duration, event: T) -> Instant {
+        Instant(self.sim_elapsed_time + time_from_now)
+    }
 }
 
 fn mul_dur_by_factor<T: Copy + Into<f64>>(duration: Duration, factor: T) -> Duration {
@@ -128,51 +130,51 @@ mod tests {
     #[test]
     fn sim_delta() {
         let mut timekeeper = Timekeeper::new();
-        assert_eq!(timekeeper.sim_delta(), DirectedTime::Still);
+        assert_eq!(timekeeper.delta(), DirectedTime::Still);
         timekeeper.update_real_time(Duration::from_secs(2));
-        assert_eq!(timekeeper.sim_delta(), DirectedTime::Still);
-        timekeeper.add_sim_time(Duration::from_secs(8));
+        assert_eq!(timekeeper.delta(), DirectedTime::Still);
+        timekeeper.add_simulation_time(Duration::from_secs(8));
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(2))
         );
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(2))
         );
         timekeeper.update_real_time(Duration::from_secs(3));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(3))
         );
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(1))
         );
         timekeeper.update_real_time(Duration::from_secs(1));
-        assert_eq!(timekeeper.sim_delta(), DirectedTime::Still);
+        assert_eq!(timekeeper.delta(), DirectedTime::Still);
     }
 
     #[test]
     fn sim_now() {
         let mut timekeeper = Timekeeper::new();
-        let start = timekeeper.sim_now();
+        let start = timekeeper.now();
         timekeeper.update_real_time(Duration::from_secs(1));
-        assert_eq!(timekeeper.sim_now(), start);
-        timekeeper.add_sim_time(Duration::from_secs(8));
-        assert_eq!(timekeeper.sim_now(), start);
+        assert_eq!(timekeeper.now(), start);
+        timekeeper.add_simulation_time(Duration::from_secs(8));
+        assert_eq!(timekeeper.now(), start);
         timekeeper.update_real_time(Duration::from_secs(1));
-        assert_ne!(timekeeper.sim_now(), start);
+        assert_ne!(timekeeper.now(), start);
         assert_eq!(
-            timekeeper.sim_now().compare_to(start),
+            timekeeper.now().compare_to(start),
             DirectedTime::Past(Duration::from_secs(1))
         );
         timekeeper.update_real_time(Duration::from_secs(1));
         assert_eq!(
-            timekeeper.sim_now().compare_to(start),
+            timekeeper.now().compare_to(start),
             DirectedTime::Past(Duration::from_secs(2))
         );
     }
@@ -180,23 +182,23 @@ mod tests {
     #[test]
     fn sim_now_backwards() {
         let mut timekeeper = Timekeeper::new();
-        timekeeper.add_sim_time(Duration::from_secs(8));
+        timekeeper.add_simulation_time(Duration::from_secs(8));
         timekeeper.update_real_time(Duration::from_secs(8));
-        let start = timekeeper.sim_now();
-        timekeeper.set_sim_time_factor(-1.0);
+        let start = timekeeper.now();
+        timekeeper.set_time_factor(-1.0);
         timekeeper.update_real_time(Duration::from_secs(1));
-        assert_eq!(timekeeper.sim_now(), start);
-        timekeeper.add_sim_time(Duration::from_secs(8));
-        assert_eq!(timekeeper.sim_now(), start);
+        assert_eq!(timekeeper.now(), start);
+        timekeeper.add_simulation_time(Duration::from_secs(8));
+        assert_eq!(timekeeper.now(), start);
         timekeeper.update_real_time(Duration::from_secs(1));
-        assert_ne!(timekeeper.sim_now(), start);
+        assert_ne!(timekeeper.now(), start);
         assert_eq!(
-            timekeeper.sim_now().compare_to(start),
+            timekeeper.now().compare_to(start),
             DirectedTime::Future(Duration::from_secs(1))
         );
         timekeeper.update_real_time(Duration::from_secs(1));
         assert_eq!(
-            timekeeper.sim_now().compare_to(start),
+            timekeeper.now().compare_to(start),
             DirectedTime::Future(Duration::from_secs(2))
         );
     }
@@ -204,70 +206,70 @@ mod tests {
     #[test]
     fn time_factor() {
         let mut timekeeper = Timekeeper::new();
-        timekeeper.add_sim_time(Duration::from_secs(8));
+        timekeeper.add_simulation_time(Duration::from_secs(8));
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(2))
         );
-        timekeeper.set_sim_time_factor(2.0);
+        timekeeper.set_time_factor(2.0);
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(2))
         );
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(4))
         );
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(2))
         );
         timekeeper.update_real_time(Duration::from_secs(2));
-        assert_eq!(timekeeper.sim_delta(), DirectedTime::Still);
-        timekeeper.set_sim_time_factor(0.5);
-        timekeeper.add_sim_time(Duration::from_secs(8));
-        assert_eq!(timekeeper.sim_delta(), DirectedTime::Still);
+        assert_eq!(timekeeper.delta(), DirectedTime::Still);
+        timekeeper.set_time_factor(0.5);
+        timekeeper.add_simulation_time(Duration::from_secs(8));
+        assert_eq!(timekeeper.delta(), DirectedTime::Still);
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(1))
         );
         timekeeper.update_real_time(Duration::from_secs(4));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(2))
         );
-        timekeeper.set_sim_time_factor(1.0);
+        timekeeper.set_time_factor(1.0);
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(2))
         );
         timekeeper.update_real_time(Duration::from_secs(8));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Future(Duration::from_secs(3))
         );
-        timekeeper.set_sim_time_factor(-1.0);
-        timekeeper.add_sim_time(Duration::from_secs(8));
+        timekeeper.set_time_factor(-1.0);
+        timekeeper.add_simulation_time(Duration::from_secs(8));
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Past(Duration::from_secs(2))
         );
-        timekeeper.set_sim_time_factor(-0.5);
+        timekeeper.set_time_factor(-0.5);
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Past(Duration::from_secs(1))
         );
-        timekeeper.set_sim_time_factor(-5.0);
+        timekeeper.set_time_factor(-5.0);
         timekeeper.update_real_time(Duration::from_secs(2));
         assert_eq!(
-            timekeeper.sim_delta(),
+            timekeeper.delta(),
             DirectedTime::Past(Duration::from_secs(5))
         );
     }
