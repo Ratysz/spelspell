@@ -2,51 +2,82 @@ use specs::prelude::*;
 use std::marker::PhantomData;
 
 use super::command::{GameCommand, GameCommandQueue};
-use super::time::{DirectedTime, Duration, Timekeeper};
+use super::time::*;
+use super::ComponentTracker;
 
 pub fn module_systems<'a, 'b>(builder: DispatcherBuilder<'a, 'b>) -> DispatcherBuilder<'a, 'b> {
     builder
-        .with(BrainSystem::<PlayerBrain>::new(), "player_brain", &[])
-        .with(PlayerBrainCommands, "player_brain_commands", &[])
+        .with(PlayerCommands, "player_commands", &[])
+        .with(
+            TimingSystem::<PlayerBrain>::new(),
+            "player_brain_timing",
+            &["player_commands"],
+        )
+        .with(
+            BrainSystem::<PlayerBrain>::new(),
+            "player_brain",
+            &["player_brain_timing"],
+        )
 }
 
-pub struct BrainSystem<T>(PhantomData<T>);
-
-impl<T> BrainSystem<T> {
-    pub fn new() -> Self {
-        BrainSystem(PhantomData)
-    }
-}
-
-trait Brain {
+pub trait Brain {
     fn think(&mut self, delta: DirectedTime, entity: Entity);
 }
 
-impl<'a, T: Brain + Component> System<'a> for BrainSystem<T> {
+struct BrainSystem<T> {
+    phantom_data: PhantomData<T>,
+    tracker: Option<ComponentTracker<T>>,
+}
+
+impl<T> BrainSystem<T> {
+    fn new() -> BrainSystem<T> {
+        BrainSystem {
+            phantom_data: PhantomData,
+            tracker: None,
+        }
+    }
+}
+
+impl<'a, T, S> System<'a> for BrainSystem<T>
+where
+    T: Brain + Component<Storage = S>,
+    S: UnprotectedStorage<T> + Tracked + Send + Sync + 'static,
+{
     type SystemData = (Read<'a, Timekeeper>, Entities<'a>, WriteStorage<'a, T>);
 
     fn run(&mut self, (time, mut entity_s, mut brain_s): Self::SystemData) {
-        let delta = time.delta();
-        for (entity, brain) in (&*entity_s, &mut brain_s).join() {
-            brain.think(delta, entity);
+        if let Some(ref mut tracker) = self.tracker {
+            tracker.populate(&brain_s);
+            let delta = time.delta();
+            for (entity, brain, _) in (&*entity_s, &mut brain_s, tracker.modified()).join() {
+                brain.think(delta, entity);
+            }
+            tracker.populate(&brain_s);
         }
+    }
+
+    fn setup(&mut self, resources: &mut Resources) {
+        Self::SystemData::setup(resources);
+        let mut storage: WriteStorage<T> = SystemData::fetch(&resources);
+        self.tracker = Some(ComponentTracker::new(&mut storage))
     }
 }
 
 #[derive(Component, Debug)]
+#[storage(FlaggedStorage)]
 pub struct PlayerBrain {}
 
 impl Brain for PlayerBrain {
     fn think(&mut self, delta: DirectedTime, entity: Entity) {
-        if delta != DirectedTime::Still {
-            trace!("{:?} is thinking... {:?}", entity, delta);
-        }
+        trace!("{:?} is thinking... {:?}", entity, delta);
     }
 }
 
-struct PlayerBrainCommands;
+impl Timed for PlayerBrain {}
 
-impl<'a> System<'a> for PlayerBrainCommands {
+struct PlayerCommands;
+
+impl<'a> System<'a> for PlayerCommands {
     type SystemData = (
         Write<'a, Timekeeper>,
         Write<'a, GameCommandQueue>,
@@ -55,7 +86,7 @@ impl<'a> System<'a> for PlayerBrainCommands {
     );
 
     fn run(&mut self, (mut time, mut commands, entity_s, mut brain_s): Self::SystemData) {
-        for (entity, brain) in (&*entity_s, &mut brain_s).join() {
+        for (entity, mut brain) in (&*entity_s, &mut brain_s.restrict_mut()).join() {
             while let Some(command) = commands.pop() {
                 match command {
                     GameCommand::Move(dir) => {

@@ -1,12 +1,15 @@
 use specs::prelude::*;
+pub use specs::storage::UnprotectedStorage;
 use std::cmp::min;
-use std::collections::VecDeque;
-use std::sync::Arc;
+use std::collections::{BTreeMap, VecDeque};
+use std::marker::PhantomData;
+use std::ops::{Add, Sub};
+use std::sync::{Arc, Weak};
 pub use std::time::Duration;
 
 const ZERO_DURATION: Duration = Duration::from_secs(0);
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Instant(Duration);
 
 impl Instant {
@@ -18,6 +21,22 @@ impl Instant {
         } else {
             DirectedTime::Past(self.0 - other.0)
         }
+    }
+}
+
+impl Add<Duration> for Instant {
+    type Output = Instant;
+
+    fn add(self, rhs: Duration) -> Instant {
+        Instant(self.0 + rhs)
+    }
+}
+
+impl Sub<Duration> for Instant {
+    type Output = Instant;
+
+    fn sub(self, rhs: Duration) -> Instant {
+        Instant(self.0 - rhs)
     }
 }
 
@@ -34,10 +53,8 @@ pub struct Timekeeper {
     sim_delta: DirectedTime,
     sim_time_factor: f32,
     sim_elapsed_time: Duration,
-    sim_schedule: VecDeque<(Duration, VecDeque<Arc<Schedulable + Send + Sync>>)>,
+    sim_schedule: BTreeMap<Duration, VecDeque<Weak<Timed + Send + Sync>>>,
 }
-
-trait Schedulable {}
 
 impl Default for Timekeeper {
     fn default() -> Self {
@@ -53,7 +70,7 @@ impl Timekeeper {
             sim_delta: DirectedTime::Still,
             sim_time_factor: 1.0,
             sim_elapsed_time: ZERO_DURATION,
-            sim_schedule: VecDeque::new(),
+            sim_schedule: BTreeMap::new(),
         }
     }
 
@@ -63,18 +80,15 @@ impl Timekeeper {
             let adjusted = mul_dur_by_factor(self.real_time_delta, self.sim_time_factor.abs());
             let time_chunk = min(adjusted, self.remaining_sim_time);
             self.remaining_sim_time -= time_chunk;
-            match self.sim_time_factor.signum() {
-                1.0 => {
-                    self.sim_elapsed_time += time_chunk;
-                    self.sim_delta = DirectedTime::Future(time_chunk);
-                }
-                -1.0 => {
-                    self.sim_elapsed_time -= time_chunk;
-                    self.sim_delta = DirectedTime::Past(time_chunk);
-                }
-                _ => unreachable!(
-                    "Time factor signum should never be anything other than `1.0` or `-1.0`"
-                ),
+            let signum = self.sim_time_factor.signum();
+            if signum > 0.0 {
+                self.sim_elapsed_time += time_chunk;
+                self.sim_delta = DirectedTime::Future(time_chunk);
+            } else if signum < 0.0 {
+                self.sim_elapsed_time -= time_chunk;
+                self.sim_delta = DirectedTime::Past(time_chunk);
+            } else {
+                self.sim_delta = DirectedTime::Still;
             }
         } else {
             self.sim_delta = DirectedTime::Still;
@@ -105,8 +119,51 @@ impl Timekeeper {
         Instant(self.sim_elapsed_time)
     }
 
-    pub fn schedule<T: Schedulable>(&mut self, time_from_now: Duration, event: T) -> Instant {
-        Instant(self.sim_elapsed_time + time_from_now)
+    pub fn schedule<T: Timed + Send + Sync + 'static>(
+        &mut self,
+        time_from_now: Duration,
+        event: Weak<T>,
+    ) -> Instant {
+        let end_time = self.sim_elapsed_time + time_from_now;
+        self.sim_schedule
+            .entry(end_time)
+            .or_insert_with(VecDeque::new)
+            .push_back(event);
+        Instant(end_time)
+    }
+}
+
+pub trait Timed {}
+
+pub struct TimingSystem<T> {
+    phantom_data: PhantomData<T>,
+    starts: BTreeMap<Instant, VecDeque<Entity>>,
+    ends: BTreeMap<Instant, VecDeque<Entity>>,
+}
+
+impl<T> TimingSystem<T> {
+    pub fn new() -> TimingSystem<T> {
+        TimingSystem {
+            phantom_data: PhantomData,
+            ends: BTreeMap::new(),
+            starts: BTreeMap::new(),
+        }
+    }
+}
+
+impl<'a, T, S> System<'a> for TimingSystem<T>
+where
+    T: Timed + Component<Storage = S>,
+    S: UnprotectedStorage<T> + Tracked + Send + Sync + 'static,
+{
+    type SystemData = (Read<'a, Timekeeper>, Entities<'a>, WriteStorage<'a, T>);
+
+    fn run(&mut self, (time, entity_s, mut timed_s): Self::SystemData) {
+        match time.delta() {
+            DirectedTime::Future(delta) => for timed in (&mut timed_s).join() {},
+            DirectedTime::Past(delta) => for timed in (&mut timed_s).join() {},
+            DirectedTime::Still => {}
+        }
     }
 }
 
@@ -117,7 +174,7 @@ fn mul_dur_by_factor<T: Copy + Into<f64>>(duration: Duration, factor: T) -> Dura
     let subsec = adjusted_s - trunc_s;
     let mut adjusted_s = trunc_s as u64;
     adjusted_n += subsec * 1_000_000_000.0;
-    let rem_n = (adjusted_n % 1_000_000_000.0);
+    let rem_n = adjusted_n % 1_000_000_000.0;
     adjusted_s += (adjusted_n / 1_000_000_000.0).trunc() as u64;
     let adjusted_n = rem_n as u32;
     Duration::new(adjusted_s, adjusted_n)
