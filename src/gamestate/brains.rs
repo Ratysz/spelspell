@@ -26,45 +26,42 @@ pub trait Brain {
 
 struct BrainSystem<T> {
     phantom_data: PhantomData<T>,
-    tracker: Option<ComponentTracker<T>>,
 }
 
 impl<T> BrainSystem<T> {
     fn new() -> BrainSystem<T> {
         BrainSystem {
             phantom_data: PhantomData,
-            tracker: None,
         }
     }
 }
 
-impl<'a, T, S> System<'a> for BrainSystem<T>
+impl<'a, T> System<'a> for BrainSystem<T>
 where
-    T: Brain + Component<Storage = S>,
-    S: UnprotectedStorage<T> + Tracked + Send + Sync + 'static,
+    T: Brain + Component + Send + Sync,
 {
-    type SystemData = (Read<'a, Timekeeper>, Entities<'a>, WriteStorage<'a, T>);
+    type SystemData = (
+        Read<'a, Timekeeper>,
+        Entities<'a>,
+        WriteStorage<'a, T>,
+        Read<'a, TimingData<T>>,
+    );
 
-    fn run(&mut self, (time, mut entity_s, mut brain_s): Self::SystemData) {
-        if let Some(ref mut tracker) = self.tracker {
-            tracker.populate(&brain_s);
-            let delta = time.delta();
-            for (entity, brain, _) in (&*entity_s, &mut brain_s, tracker.modified()).join() {
-                brain.think(delta, entity);
-            }
-            tracker.populate(&brain_s);
+    fn run(&mut self, (time, mut entity_s, mut brain_s, timing_data): Self::SystemData) {
+        let delta = time.delta();
+        for (entity, brain, _) in (&*entity_s, &mut brain_s, timing_data.scheduled()).join() {
+            brain.think(delta, entity);
         }
     }
 
     fn setup(&mut self, resources: &mut Resources) {
         Self::SystemData::setup(resources);
         let mut storage: WriteStorage<T> = SystemData::fetch(&resources);
-        self.tracker = Some(ComponentTracker::new(&mut storage))
     }
 }
 
 #[derive(Component, Debug)]
-#[storage(FlaggedStorage)]
+#[storage(HashMapStorage)]
 pub struct PlayerBrain {}
 
 impl Brain for PlayerBrain {
@@ -86,11 +83,11 @@ impl<'a> System<'a> for PlayerCommands {
     );
 
     fn run(&mut self, (mut time, mut commands, entity_s, mut brain_s): Self::SystemData) {
-        for (entity, mut brain) in (&*entity_s, &mut brain_s.restrict_mut()).join() {
+        for (entity, mut brain) in (&*entity_s, &mut brain_s).join() {
             while let Some(command) = commands.pop() {
                 match command {
                     GameCommand::Move(dir) => {
-                        time.add_simulation_time(Duration::from_secs(1));
+                        time.add_simulation_time(Duration::from_millis(250));
                         info!("Move {:?}", dir);
                     }
                 }

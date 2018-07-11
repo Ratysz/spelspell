@@ -1,5 +1,4 @@
 use specs::prelude::*;
-pub use specs::storage::UnprotectedStorage;
 use std::cmp::min;
 use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
@@ -135,35 +134,78 @@ impl Timekeeper {
 
 pub trait Timed {}
 
-pub struct TimingSystem<T> {
+pub struct TimingData<T> {
     phantom_data: PhantomData<T>,
+    should_update: BitSet,
     starts: BTreeMap<Instant, VecDeque<Entity>>,
     ends: BTreeMap<Instant, VecDeque<Entity>>,
+}
+
+impl<T> Default for TimingData<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> TimingData<T> {
+    fn new() -> TimingData<T> {
+        TimingData {
+            phantom_data: PhantomData,
+            should_update: BitSet::new(),
+            ends: BTreeMap::new(),
+            starts: BTreeMap::new(),
+        }
+    }
+
+    fn clear_update_flags(&mut self) {
+        self.should_update.clear();
+    }
+
+    fn set_update_flag(&mut self, entity: &Entity) {
+        self.should_update.add(entity.id());
+    }
+
+    pub fn scheduled(&self) -> &BitSet {
+        &self.should_update
+    }
+}
+
+pub struct TimingSystem<T> {
+    phantom_data: PhantomData<T>,
 }
 
 impl<T> TimingSystem<T> {
     pub fn new() -> TimingSystem<T> {
         TimingSystem {
             phantom_data: PhantomData,
-            ends: BTreeMap::new(),
-            starts: BTreeMap::new(),
         }
     }
 }
 
-impl<'a, T, S> System<'a> for TimingSystem<T>
+impl<'a, T> System<'a> for TimingSystem<T>
 where
-    T: Timed + Component<Storage = S>,
-    S: UnprotectedStorage<T> + Tracked + Send + Sync + 'static,
+    T: Timed + Component + Send + Sync,
 {
-    type SystemData = (Read<'a, Timekeeper>, Entities<'a>, WriteStorage<'a, T>);
+    type SystemData = (
+        Read<'a, Timekeeper>,
+        Entities<'a>,
+        ReadStorage<'a, T>,
+        Write<'a, TimingData<T>>,
+    );
 
-    fn run(&mut self, (time, entity_s, mut timed_s): Self::SystemData) {
+    fn run(&mut self, (time, entity_s, timed_s, mut timing_data): Self::SystemData) {
+        timing_data.clear_update_flags();
         match time.delta() {
-            DirectedTime::Future(delta) => for timed in (&mut timed_s).join() {},
-            DirectedTime::Past(delta) => for timed in (&mut timed_s).join() {},
-            DirectedTime::Still => {}
+            DirectedTime::Future(delta) => for (entity, _) in (&*entity_s, &timed_s).join() {
+                timing_data.set_update_flag(&entity);
+            },
+            _ => (),
         }
+    }
+
+    fn setup(&mut self, resources: &mut Resources) {
+        Self::SystemData::setup(resources);
+        resources.insert(TimingData::<T>::new());
     }
 }
 
