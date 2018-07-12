@@ -42,20 +42,21 @@ impl<'a, 'b> GameState<'a, 'b> {
 
         let mut dispatcher = DispatcherBuilderWrapper(DispatcherBuilder::new())
             .with(brains::module_systems)
+            .with(physics::module_systems)
             .build();
         dispatcher.setup(&mut world.res);
 
         {
-            use self::brains::PlayerBrain;
-            use self::physics::Direction;
-            use self::physics::Position;
-            use self::visual::BaseSprite;
+            use self::brains::*;
+            use self::physics::*;
+            use self::visual::*;
             use assets::DrawableHandle;
             use ggez::graphics::Color;
 
             world
                 .create_entity()
                 .with(Position::new(5, 5, Direction::None))
+                .with(Movable::default())
                 .with(BaseSprite {
                     drawable: DrawableHandle::Circle,
                     color: Color::from([0.0, 1.0, 1.0, 1.0]),
@@ -94,61 +95,6 @@ impl<'a, 'b> GameState<'a, 'b> {
                 .write_resource::<command::GameCommandQueue>()
                 .queue(command);
         }
-    }
-}
-
-pub struct ComponentTracker<T> {
-    phantom_data: PhantomData<T>,
-    inserted_id: ReaderId<InsertedFlag>,
-    modified_id: ReaderId<ModifiedFlag>,
-    removed_id: ReaderId<RemovedFlag>,
-    inserted: BitSet,
-    modified: BitSet,
-    removed: BitSet,
-}
-
-impl<T, S> ComponentTracker<T>
-where
-    T: Component<Storage = S>,
-    S: UnprotectedStorage<T> + Tracked + Send + Sync + 'static,
-{
-    pub fn new<D>(storage: &mut Storage<T, D>) -> ComponentTracker<T>
-    where
-        D: DerefMut<Target = MaskedStorage<T>>,
-    {
-        ComponentTracker {
-            phantom_data: PhantomData,
-            inserted_id: storage.track_inserted(),
-            modified_id: storage.track_modified(),
-            removed_id: storage.track_removed(),
-            inserted: BitSet::new(),
-            modified: BitSet::new(),
-            removed: BitSet::new(),
-        }
-    }
-
-    pub fn populate<D>(&mut self, storage: &Storage<T, D>)
-    where
-        D: Deref<Target = MaskedStorage<T>>,
-    {
-        self.inserted.clear();
-        self.modified.clear();
-        self.removed.clear();
-        storage.populate_inserted(&mut self.inserted_id, &mut self.inserted);
-        storage.populate_modified(&mut self.modified_id, &mut self.modified);
-        storage.populate_removed(&mut self.removed_id, &mut self.removed);
-    }
-
-    pub fn inserted(&self) -> &BitSet {
-        &self.inserted
-    }
-
-    pub fn modified(&self) -> &BitSet {
-        &self.modified
-    }
-
-    pub fn removed(&self) -> &BitSet {
-        &self.removed
     }
 }
 

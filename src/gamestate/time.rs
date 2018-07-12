@@ -1,6 +1,8 @@
+use specs::join::JoinIter;
 use specs::prelude::*;
+use specs::world::Index;
 use std::cmp::min;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::ops::{Add, Sub};
 use std::sync::{Arc, Weak};
@@ -52,7 +54,8 @@ pub struct Timekeeper {
     sim_delta: DirectedTime,
     sim_time_factor: f32,
     sim_elapsed_time: Duration,
-    sim_schedule: BTreeMap<Duration, VecDeque<Weak<Timed + Send + Sync>>>,
+    sim_closest_future: Duration,
+    sim_closest_past: Duration,
 }
 
 impl Default for Timekeeper {
@@ -69,7 +72,8 @@ impl Timekeeper {
             sim_delta: DirectedTime::Still,
             sim_time_factor: 1.0,
             sim_elapsed_time: ZERO_DURATION,
-            sim_schedule: BTreeMap::new(),
+            sim_closest_future: ZERO_DURATION,
+            sim_closest_past: ZERO_DURATION,
         }
     }
 
@@ -77,13 +81,35 @@ impl Timekeeper {
         self.real_time_delta = d_time;
         if self.remaining_sim_time > ZERO_DURATION {
             let adjusted = mul_dur_by_factor(self.real_time_delta, self.sim_time_factor.abs());
-            let time_chunk = min(adjusted, self.remaining_sim_time);
-            self.remaining_sim_time -= time_chunk;
             let signum = self.sim_time_factor.signum();
             if signum > 0.0 {
+                let time_chunk = min(
+                    adjusted,
+                    if self.sim_closest_future != ZERO_DURATION {
+                        min(
+                            self.remaining_sim_time,
+                            self.sim_closest_future - self.sim_elapsed_time,
+                        )
+                    } else {
+                        self.remaining_sim_time
+                    },
+                );
+                self.remaining_sim_time -= time_chunk;
                 self.sim_elapsed_time += time_chunk;
                 self.sim_delta = DirectedTime::Future(time_chunk);
             } else if signum < 0.0 {
+                let time_chunk = min(
+                    adjusted,
+                    if self.sim_closest_past != ZERO_DURATION {
+                        min(
+                            self.remaining_sim_time,
+                            self.sim_elapsed_time - self.sim_closest_past,
+                        )
+                    } else {
+                        self.remaining_sim_time
+                    },
+                );
+                self.remaining_sim_time -= time_chunk;
                 self.sim_elapsed_time -= time_chunk;
                 self.sim_delta = DirectedTime::Past(time_chunk);
             } else {
@@ -117,28 +143,25 @@ impl Timekeeper {
     pub fn now(&self) -> Instant {
         Instant(self.sim_elapsed_time)
     }
-
-    pub fn schedule<T: Timed + Send + Sync + 'static>(
-        &mut self,
-        time_from_now: Duration,
-        event: Weak<T>,
-    ) -> Instant {
-        let end_time = self.sim_elapsed_time + time_from_now;
-        self.sim_schedule
-            .entry(end_time)
-            .or_insert_with(VecDeque::new)
-            .push_back(event);
-        Instant(end_time)
-    }
 }
 
-pub trait Timed {}
+pub trait Timed: Component {
+    fn schedule(
+        &self,
+        entity: &Entity,
+        time: &Timekeeper,
+        timing_data: &mut TimingData<Self>,
+        duration: Duration,
+    ) {
+        timing_data.schedule(entity, time, duration);
+    }
+}
 
 pub struct TimingData<T> {
     phantom_data: PhantomData<T>,
     should_update: BitSet,
-    starts: BTreeMap<Instant, VecDeque<Entity>>,
-    ends: BTreeMap<Instant, VecDeque<Entity>>,
+    starts: BTreeMap<Instant, Vec<Index>>,
+    ends: BTreeMap<Instant, Vec<Index>>,
 }
 
 impl<T> Default for TimingData<T> {
@@ -165,6 +188,29 @@ impl<T> TimingData<T> {
         self.should_update.add(entity.id());
     }
 
+    fn schedule(&mut self, entity: &Entity, time: &Timekeeper, duration: Duration) {
+        let (start, end) = match time.delta() {
+            DirectedTime::Past(_) => (time.now() - duration, time.now()),
+            _ => (time.now(), time.now() + duration),
+        };
+        self.starts
+            .entry(start)
+            .or_insert_with(Vec::new)
+            .push(entity.id());
+        self.ends
+            .entry(end)
+            .or_insert_with(Vec::new)
+            .push(entity.id());
+        info!("scheduled {:?} for {:?}-{:?}", entity, start, end);
+    }
+
+    /*fn populate_schedule<C>(&mut self, join: JoinIter<(Entities, ReadStorage<C>)>, time: Timekeeper)
+    where
+        C: Component + Timed,
+    {
+
+    }*/
+
     pub fn scheduled(&self) -> &BitSet {
         &self.should_update
     }
@@ -187,7 +233,7 @@ where
     T: Timed + Component + Send + Sync,
 {
     type SystemData = (
-        Read<'a, Timekeeper>,
+        Write<'a, Timekeeper>,
         Entities<'a>,
         ReadStorage<'a, T>,
         Write<'a, TimingData<T>>,
@@ -196,11 +242,27 @@ where
     fn run(&mut self, (time, entity_s, timed_s, mut timing_data): Self::SystemData) {
         timing_data.clear_update_flags();
         match time.delta() {
-            DirectedTime::Future(delta) => for (entity, _) in (&*entity_s, &timed_s).join() {
-                timing_data.set_update_flag(&entity);
-            },
-            _ => (),
+            DirectedTime::Still => (),
+            _ => {
+                for (entity, _) in (&*entity_s, &timed_s).join() {
+                    timing_data.set_update_flag(&entity);
+                }
+            }
         }
+        // TODO: Timekeeper::sim_closest_future, Timekeeper::sim_closest_past
+        /*match time.delta() {
+            DirectedTime::Still => (),
+            other => {
+                let (start, end) = match other {
+                    DirectedTime::Future(delta) => (time.now() - delta, time.now()),
+                    DirectedTime::Past(delta) => (time.now(), time.now() + delta),
+                    _ => unreachable!("Literally impossible."),
+                };
+                for (entity, _) in (&*entity_s, &timed_s).join() {
+                    timing_data.set_update_flag(&entity);
+                }
+            }
+        };*/
     }
 
     fn setup(&mut self, resources: &mut Resources) {

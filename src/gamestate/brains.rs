@@ -1,9 +1,9 @@
 use specs::prelude::*;
 use std::marker::PhantomData;
 
-use super::command::{GameCommand, GameCommandQueue};
+use super::command::*;
+use super::physics::*;
 use super::time::*;
-use super::ComponentTracker;
 
 pub fn module_systems<'a, 'b>(builder: DispatcherBuilder<'a, 'b>) -> DispatcherBuilder<'a, 'b> {
     builder
@@ -20,7 +20,7 @@ pub fn module_systems<'a, 'b>(builder: DispatcherBuilder<'a, 'b>) -> DispatcherB
         )
 }
 
-pub trait Brain {
+pub trait Brain: Component {
     fn think(&mut self, delta: DirectedTime, entity: Entity);
 }
 
@@ -47,9 +47,9 @@ where
         Read<'a, TimingData<T>>,
     );
 
-    fn run(&mut self, (time, mut entity_s, mut brain_s, timing_data): Self::SystemData) {
+    fn run(&mut self, (time, mut entity_s, mut brain_s, brain_timing): Self::SystemData) {
         let delta = time.delta();
-        for (entity, brain, _) in (&*entity_s, &mut brain_s, timing_data.scheduled()).join() {
+        for (entity, brain, _) in (&*entity_s, &mut brain_s, brain_timing.scheduled()).join() {
             brain.think(delta, entity);
         }
     }
@@ -74,21 +74,37 @@ impl Timed for PlayerBrain {}
 
 struct PlayerCommands;
 
-impl<'a> System<'a> for PlayerCommands {
-    type SystemData = (
-        Write<'a, Timekeeper>,
-        Write<'a, GameCommandQueue>,
-        Entities<'a>,
-        WriteStorage<'a, PlayerBrain>,
-    );
+#[derive(SystemData)]
+struct PlayerCommandsData<'a> {
+    time: Write<'a, Timekeeper>,
+    commands: Write<'a, GameCommandQueue>,
+    entity: Entities<'a>,
+    brain: WriteStorage<'a, PlayerBrain>,
+    brain_timing: Write<'a, TimingData<PlayerBrain>>,
+    movable: WriteStorage<'a, Movable>,
+    movable_timing: Write<'a, TimingData<Movable>>,
+}
 
-    fn run(&mut self, (mut time, mut commands, entity_s, mut brain_s): Self::SystemData) {
-        for (entity, mut brain) in (&*entity_s, &mut brain_s).join() {
-            while let Some(command) = commands.pop() {
+impl<'a> System<'a> for PlayerCommands {
+    type SystemData = PlayerCommandsData<'a>;
+
+    fn run(&mut self, mut data: Self::SystemData) {
+        for (entity, mut brain, mut movable) in
+            (&*data.entity, &mut data.brain, &mut data.movable).join()
+        {
+            while let Some(command) = data.commands.pop() {
                 match command {
-                    GameCommand::Move(dir) => {
-                        time.add_simulation_time(Duration::from_millis(250));
-                        info!("Move {:?}", dir);
+                    GameCommand::Move(direction) => {
+                        let duration = Duration::from_millis(250);
+                        data.time.add_simulation_time(duration);
+                        info!("Move {:?}", direction);
+                        movable.start_moving(
+                            &entity,
+                            &data.time,
+                            &mut data.movable_timing,
+                            direction,
+                            duration,
+                        );
                     }
                 }
             }

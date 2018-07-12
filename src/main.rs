@@ -4,6 +4,9 @@ extern crate bitflags;
 extern crate chrono;
 extern crate fern;
 extern crate ggez;
+extern crate shred;
+#[macro_use]
+extern crate shred_derive;
 #[macro_use]
 extern crate log;
 extern crate nalgebra;
